@@ -24,7 +24,11 @@
  */
 
 package org.geysermc.geyser.network.bedrock.nethernet.signalling;
+import org.geysermc.geyser.GeyserImpl;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import org.mockito.MockedStatic;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.InputStream;
@@ -35,8 +39,24 @@ import java.security.cert.X509Certificate;
 import java.time.Instant;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.*;
 
 class BuiltinIdentityTest {
+    private static MockedStatic<GeyserImpl> geyserSingleton;
+
+    @BeforeAll
+    static void initializeGeyserDisplayName() {
+        GeyserImpl geyser = mock(GeyserImpl.class, RETURNS_DEEP_STUBS);
+        when(geyser.config().gameplay().serverName()).thenReturn("IdentityTest");
+        geyserSingleton = mockStatic(GeyserImpl.class);
+        geyserSingleton.when(GeyserImpl::getInstance).thenReturn(geyser);
+    }
+
+    @AfterAll
+    static void closeGeyserDisplayName() {
+        geyserSingleton.close();
+    }
+
     @Test
     void createsAndReusesPrivateSigningIdentity(@TempDir Path directory) throws Exception {
         Path file = BuiltinIdentity.ensure(directory);
