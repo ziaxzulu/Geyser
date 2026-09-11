@@ -207,7 +207,7 @@ public final class NetherNetServer implements EventRegistrar {
             NetherNetLogging.setNativeLogLevel("WARN");
 
             NetherNetHTTPSignaling.Builder signallingBuilder = new NetherNetHTTPSignaling.Builder()
-                    .setIdentityKeystore(identity.toFile(), "")
+                    .setIdentity(BuiltinIdentity.load(identity))
                     .setMotdProvider((host, remoteAddress) -> {
                         BedrockPong pong = pingResponder.onQuery(GUID, remoteAddress);
 

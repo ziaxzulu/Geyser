@@ -77,6 +77,9 @@ class BuiltinIdentityTest {
         }
         X509Certificate certificate = (X509Certificate) store.getCertificate("identity");
         assertEquals(Instant.parse("9999-12-31T23:59:59Z"), certificate.getNotAfter().toInstant());
+        var loaded = BuiltinIdentity.load(directory.resolve(BuiltinIdentity.FILE_NAME));
+        assertArrayEquals(certificate.getPublicKey().getEncoded(), loaded.keyPair().getPublic().getEncoded());
+        assertArrayEquals(store.getKey("identity", new char[0]).getEncoded(), loaded.keyPair().getPrivate().getEncoded());
     }
 
     @Test

@@ -33,6 +33,7 @@ import org.cloudburstmc.netty.util.nethernet.ServerIdentity;
 import org.geysermc.geyser.GeyserImpl;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.OutputStream;
 import java.math.BigInteger;
 import java.nio.file.Files;
@@ -44,8 +45,10 @@ import java.nio.file.attribute.PosixFilePermissions;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
 import java.security.KeyStore;
+import java.security.PrivateKey;
 import java.security.SecureRandom;
 import java.security.cert.Certificate;
+import java.security.cert.X509Certificate;
 import java.security.spec.ECGenParameterSpec;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -98,15 +101,27 @@ public final class BuiltinIdentity {
             Files.setPosixFilePermissions(file, OWNER_ONLY);
         }
 
-        // NetherNetHTTPSignaling only logs a broken identity and then signs with a throwaway key,
-        // which would prompt every player again after each restart
+        // Fail startup if the persistent identity cannot be read; never substitute a throwaway key.
         try {
-            ServerIdentity.fromPkcs12(file.toFile(), "");
+            load(file);
         } catch (Exception e) {
             throw new IOException("The builtin signalling identity " + file + " is unreadable. Only delete it if it cannot be restored; " +
                 "a new identity makes every player confirm the server again", e);
         }
         return file;
+    }
+
+    /** Loads Geyser's persistent key using Network's keypair-based identity API. */
+    public static ServerIdentity load(Path file) throws Exception {
+        KeyStore store = KeyStore.getInstance("PKCS12");
+        try (InputStream input = Files.newInputStream(file)) {
+            store.load(input, new char[0]);
+        }
+        if (!(store.getKey("identity", new char[0]) instanceof PrivateKey privateKey)
+                || !(store.getCertificate("identity") instanceof X509Certificate certificate)) {
+            throw new IOException("The builtin signalling keystore has no identity key and certificate");
+        }
+        return new ServerIdentity(privateKey, certificate.getPublicKey(), certificate.getNotAfter().toInstant(), DISPLAY_NAME);
     }
 
     private static void create(Path directory, Path file, boolean posix) throws Exception {
