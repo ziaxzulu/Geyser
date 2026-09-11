@@ -101,7 +101,7 @@ public final class BuiltinIdentity {
         // NetherNetHTTPSignaling only logs a broken identity and then signs with a throwaway key,
         // which would prompt every player again after each restart
         try {
-            ServerIdentity.fromKeystore(file.toFile(), "");
+            ServerIdentity.fromPkcs12(file.toFile(), "");
         } catch (Exception e) {
             throw new IOException("The builtin signalling identity " + file + " is unreadable. Only delete it if it cannot be restored; " +
                 "a new identity makes every player confirm the server again", e);
