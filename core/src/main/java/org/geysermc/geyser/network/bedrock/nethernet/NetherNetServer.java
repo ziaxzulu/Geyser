@@ -60,6 +60,7 @@ import org.geysermc.geyser.network.bedrock.nethernet.signalling.provider.GeyserS
 import org.cloudburstmc.netty.signalling.provider.NativeProviderHostFactory;
 import org.cloudburstmc.netty.signalling.provider.ProviderHostFactory;
 import org.cloudburstmc.netty.signalling.provider.ProviderRuntimeConfiguration;
+import org.geysermc.geyser.network.bedrock.nethernet.signalling.provider.WardenLocationAdapter;
 import org.cloudburstmc.netty.signalling.provider.ProviderShutdown;
 import org.cloudburstmc.netty.signalling.provider.ProviderRuntimeObservations;
 import org.geysermc.geyser.network.bedrock.nethernet.signalling.provider.WardenClaimAdapter;
@@ -337,7 +338,7 @@ public final class NetherNetServer implements EventRegistrar {
                 initializingTransport = transport;
                 transport = new GameOutcomeTransport(transport, gameOutcomes);
                 ProviderClient client = new ProviderClient(runtime.clientConfiguration(), store, transport,
-                        () -> providerStatusSupplier.get(), () -> ProviderRuntimeObservations.health(geyser.getSessionManager().size(), runtime.capacity(), System.currentTimeMillis(), GeyserImpl.VERSION), message -> logger().warning(message));
+                        () -> providerStatusSupplier.get(), () -> ProviderRuntimeObservations.health(geyser.getSessionManager().size(), runtime.capacity(), System.currentTimeMillis(), GeyserImpl.VERSION, !stopping), message -> logger().warning(message));
                 store = null; // ProviderClient now owns its lifetime.
                 initializingTransport = null;
                 synchronized (providerLifecycle) {
@@ -354,7 +355,7 @@ public final class NetherNetServer implements EventRegistrar {
                     providerClient = client;
                     wardenClaim = new WardenClaimAdapter(client);
                 }
-                client.start().whenComplete((registration, failure) -> {
+                client.updateHeartbeatExtensions(WardenLocationAdapter.extensions(nxs.location())).thenCompose(ignored -> client.start()).whenComplete((registration, failure) -> {
                     if (failure != null) {
                         logger().error("Provider startup failed: " + providerFailure(failure));
                         stopProvider();

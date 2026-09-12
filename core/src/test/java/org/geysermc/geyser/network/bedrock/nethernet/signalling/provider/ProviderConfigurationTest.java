@@ -40,6 +40,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /**
@@ -88,6 +89,21 @@ class ProviderConfigurationTest {
         assertEquals(Map.of("location", "london"), result.tags());
         assertEquals(1, result.advertisedEndpoints().size());
         assertEquals("Geyser", result.label());
+    }
+
+    @Test
+    void emitsOptionalHostLocationAndCanClearAnEarlierSetting() throws Exception {
+        var settings = config("nxs:\n  location: {country: nl, city: Amsterdam, latitude: 52.37, longitude: 4.89}\n");
+        var location = WardenLocationAdapter.extensions(settings.nxs().location()).getAsJsonObject("cloud.warden.location");
+        assertFalse(location.get("critical").getAsBoolean());
+        assertEquals(1, location.get("version").getAsInt());
+        assertEquals("NL", location.getAsJsonObject("data").getAsJsonObject("location").get("country").getAsString());
+        assertEquals(52.37, location.getAsJsonObject("data").getAsJsonObject("location").get("latitude").getAsDouble());
+        assertEquals(com.google.gson.JsonNull.INSTANCE, WardenLocationAdapter.extensions(config("{}").nxs().location())
+                .getAsJsonObject("cloud.warden.location").getAsJsonObject("data").get("location"));
+        for (String value : List.of("{country: ZZ}", "{city: London}", "{latitude: 0}", "{latitude: 91, longitude: 0}", "{country: NL, extra: value}")) {
+            assertThrows(IOException.class, () -> WardenLocationAdapter.extensions(config("nxs:\n  location: " + value + "\n").nxs().location()));
+        }
     }
 
     @Test
