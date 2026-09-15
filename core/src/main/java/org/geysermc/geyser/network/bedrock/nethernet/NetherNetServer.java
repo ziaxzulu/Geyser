@@ -326,6 +326,7 @@ public final class NetherNetServer implements EventRegistrar {
                 ServerBootstrap bootstrap = new ServerBootstrap().group(eventLoopGroup).childHandler(providerInitialiser);
                 ProviderHostFactory.Host host = factory.open(bootstrap, new InetSocketAddress(runtime.bindAddress(), runtime.udpPort()), Map.of("stateDirectory", statePath.toAbsolutePath().toString(), "profile", runtime.profile(),
                         "advertisedEndpoints", runtime.encodedAdvertisedEndpoints(),
+                        "endpointPolicy", NativeProviderHostFactory.EXPLICIT_OR_PUBLIC_LOCAL,
                         "localDevelopment", Boolean.toString(Set.of("127.0.0.1", "localhost", "[::1]").contains(origin.getHost())))).toCompletableFuture().get(30, TimeUnit.SECONDS);
                 netherNetChannel = host.channel();
                 transport = host.transport();

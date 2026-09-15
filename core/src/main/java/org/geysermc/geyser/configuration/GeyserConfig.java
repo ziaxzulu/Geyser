@@ -185,7 +185,7 @@ public interface GeyserConfig {
 
         @ConfigSerializable
         interface NxsConfig {
-            @Comment("Additional reachable UDP endpoints, e.g. 198.51.100.1:19133 or [2001:db8::1]:19133. Configure forwarding separately.")
+            @Comment("Complete set of reachable UDP endpoints, e.g. 198.51.100.1:19133 or [2001:db8::1]:19133. When set, only these endpoints are advertised. Empty discovers public local addresses. Configure forwarding separately.")
             default List<String> advertiseAddresses() {
                 return List.of();
             }
