@@ -25,6 +25,9 @@
 
 package org.geysermc.geyser.network.bedrock.nethernet.signaling.provider;
 
+import com.google.gson.JsonParser;
+import org.cloudburstmc.netty.signaling.ProviderClient;
+import org.cloudburstmc.netty.signaling.provider.NativeProviderHostFactory;
 import org.cloudburstmc.netty.signaling.provider.ProviderRuntimeConfiguration;
 import org.geysermc.geyser.configuration.GeyserConfig;
 import org.junit.jupiter.api.Test;
@@ -40,7 +43,9 @@ import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * What Geyser's configuration binds to and hands the resolver. How the resolver treats those values
@@ -59,7 +64,8 @@ class ProviderConfigurationTest {
         throws IOException {
         var nxs = config.nxs();
         return ProviderRuntimeConfiguration.resolve(
-            new ProviderRuntimeConfiguration.Settings(nxs.endpoint(), nxs.token(), nxs.advertiseAddresses(), nxs.data()),
+            new ProviderRuntimeConfiguration.Settings(nxs.endpoint(), nxs.token(), nxs.advertiseAddresses(), nxs.data(),
+                nxs.controlTransport(), nxs.diagnosticAdmission(), nxs.maintainedCandidates(), nxs.stunServers()),
             dir, "::", 20000, 40, "Geyser");
     }
 
@@ -102,5 +108,57 @@ class ProviderConfigurationTest {
         assertEquals("::", result.bindAddress());
         assertEquals(20000, result.udpPort());
         assertEquals(List.of(), result.advertisedEndpoints());
+    }
+
+    @Test
+    void optionalConnectivityKeepsExistingDefaults(@TempDir Path dir) throws Exception {
+        var result = resolve(config("{}"), dir);
+        assertEquals(ProviderClient.ControlTransport.HTTP, result.controlTransport());
+        assertFalse(result.maintainedCandidates());
+        assertFalse(result.diagnosticAdmission());
+        assertTrue(result.stunServers().isEmpty());
+        assertEquals(NativeProviderHostFactory.EXPLICIT_OR_PUBLIC_LOCAL, result.nativeHostOptions().get("endpointPolicy"));
+        assertFalse(result.nativeHostOptions().containsKey("candidatePublication"));
+    }
+
+    @Test
+    void passesBothFamiliesAndOptInsToNativeAndClientSettings(@TempDir Path dir) throws Exception {
+        var result = resolve(config("""
+            nxs:
+              control-transport: auto
+              maintained-candidates: true
+              diagnostic-admission: true
+              stun-servers: ['1.1.1.1:3478', '[2606:4700:4700::1111]:3478']
+            """), dir);
+        assertEquals(ProviderClient.ControlTransport.AUTO, result.clientConfiguration().controlTransport());
+        assertTrue(result.clientConfiguration().diagnosticAdmission());
+        assertEquals("discovered", result.clientConfiguration().connectivityMethod());
+        assertEquals(2, result.stunServers().size());
+        var options = result.nativeHostOptions();
+        assertEquals(NativeProviderHostFactory.MAINTAINED_V1, options.get("candidatePublication"));
+        assertEquals("true", options.get("diagnosticAdmission"));
+        assertEquals(2, JsonParser.parseString(options.get("stunServers")).getAsJsonArray().size());
+        assertEquals(dir.resolve("provider-state").toString(), options.get("stateDirectory"));
+    }
+
+    @Test
+    void explicitAddressesSuppressAllStunSettings(@TempDir Path dir) throws Exception {
+        var result = resolve(config("""
+            nxs:
+              advertise-addresses: ['8.8.8.8:19133']
+              maintained-candidates: true
+              stun-servers: ['ignored.example:3478']
+            """), dir);
+        assertTrue(result.stunServers().isEmpty());
+        assertEquals("[]", result.nativeHostOptions().get("stunServers"));
+        assertEquals("defined", result.clientConfiguration().connectivityMethod());
+        assertEquals(1, JsonParser.parseString(result.nativeHostOptions().get("advertisedEndpoints")).getAsJsonArray().size());
+    }
+
+    @Test
+    void refusesUnsupportedCarriersAndUnresolvedOrDisabledStun(@TempDir Path dir) {
+        assertThrows(IOException.class, () -> config("nxs:\n  control-transport: websocket-only\n"));
+        assertThrows(IOException.class, () -> resolve(config("nxs:\n  stun-servers: ['1.1.1.1:3478']\n"), dir));
+        assertThrows(IOException.class, () -> resolve(config("nxs:\n  maintained-candidates: true\n  stun-servers: ['stun.example:3478']\n"), dir));
     }
 }

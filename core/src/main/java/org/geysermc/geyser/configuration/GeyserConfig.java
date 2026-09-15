@@ -26,6 +26,7 @@
 package org.geysermc.geyser.configuration;
 
 import org.checkerframework.checker.nullness.qual.NonNull;
+import org.cloudburstmc.netty.signaling.ProviderClient;
 import org.geysermc.geyser.Constants;
 import org.geysermc.geyser.GeyserImpl;
 import org.geysermc.geyser.api.network.AuthType;
@@ -185,10 +186,28 @@ public interface GeyserConfig {
 
         @ConfigSerializable
         interface NxsConfig {
+            @Comment("Control transport: http uses HTTPS requests; auto uses the provider's advertised WebSocket with HTTPS fallback.")
+            default ProviderClient.ControlTransport controlTransport() {
+                return ProviderClient.ControlTransport.HTTP;
+            }
+
             @Comment("Complete set of reachable UDP endpoints, e.g. 198.51.100.1:19133 or [2001:db8::1]:19133. When set, only these endpoints are advertised. Empty discovers public local addresses. Configure forwarding separately.")
             default List<String> advertiseAddresses() {
                 return List.of();
             }
+
+            @Comment("Maintain public UDP mappings on the gameplay socket. Direct endpoints are tried first per family; configured advertise-addresses disable STUN for both families.")
+            @DefaultBoolean(false)
+            boolean maintainedCandidates();
+
+            @Comment("Numeric STUN endpoints, at most one per family: IPv4:port and [IPv6]:port. Requires maintained-candidates; ignored when advertise-addresses is configured. Hostnames are not resolved here.")
+            default List<String> stunServers() {
+                return List.of();
+            }
+
+            @Comment("Allow authenticated provider connectivity probes on the gameplay socket. Tests WebRTC transport only; does not change player admission or serving state.")
+            @DefaultBoolean(false)
+            boolean diagnosticAdmission();
 
             @Comment("Bearer token or file:/path/to/token. Empty uses anonymous registration.")
             @DefaultString()

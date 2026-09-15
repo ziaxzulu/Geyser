@@ -27,6 +27,7 @@ package org.geysermc.geyser.network.bedrock.nethernet.signaling.provider;
 
 import com.google.gson.JsonObject;
 import org.cloudburstmc.netty.signaling.ProviderTransport;
+import org.cloudburstmc.netty.signaling.diagnostic.DiagnosticHostPolicy;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -47,6 +48,41 @@ public final class GameOutcomeTransport implements ProviderTransport {
     @Override
     public CompletionStage<JsonObject> hostProfile() {
         return delegate.hostProfile();
+    }
+
+    @Override
+    public CompletionStage<HostProfileSnapshot> captureHostProfile() {
+        return delegate.captureHostProfile();
+    }
+
+    @Override
+    public long candidatePublicationVersion() {
+        return delegate.candidatePublicationVersion();
+    }
+
+    @Override
+    public CompletionStage<Void> reportConnectivityChecks(long candidateRevision, List<ConnectivityCheck> checks) {
+        return delegate.reportConnectivityChecks(candidateRevision, checks);
+    }
+
+    @Override
+    public boolean supportsDiagnosticAdmission() {
+        return delegate.supportsDiagnosticAdmission();
+    }
+
+    @Override
+    public CompletionStage<Void> configureDiagnostics(DiagnosticHostPolicy policy) {
+        return delegate.configureDiagnostics(policy);
+    }
+
+    @Override
+    public CompletionStage<Void> configureDiagnostics(DiagnosticHostPolicy policy, long deadlineNanos) {
+        return delegate.configureDiagnostics(policy, deadlineNanos);
+    }
+
+    @Override
+    public CompletionStage<Void> disableDiagnostics() {
+        return delegate.disableDiagnostics();
     }
 
     @Override
