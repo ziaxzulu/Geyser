@@ -27,10 +27,12 @@ package org.geysermc.geyser.network.bedrock.nethernet.signaling.provider;
 
 import com.google.gson.JsonObject;
 import org.cloudburstmc.netty.signaling.ProviderTransport;
+import org.cloudburstmc.netty.signaling.control.AssistedJoin;
 import org.cloudburstmc.netty.signaling.diagnostic.DiagnosticHostPolicy;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.CompletionStage;
 
 /**
@@ -63,6 +65,21 @@ public final class GameOutcomeTransport implements ProviderTransport {
     @Override
     public CompletionStage<Void> reportConnectivityChecks(long candidateRevision, List<ConnectivityCheck> checks) {
         return delegate.reportConnectivityChecks(candidateRevision, checks);
+    }
+
+    @Override
+    public boolean supportsAssistedJoins() {
+        return delegate.supportsAssistedJoins();
+    }
+
+    @Override
+    public Set<Integer> assistedFallbackReadyFamilies() {
+        return delegate.assistedFallbackReadyFamilies();
+    }
+
+    @Override
+    public CompletionStage<String> assistedJoin(AssistedJoin join, Runnable requireCurrent) {
+        return delegate.assistedJoin(join, requireCurrent);
     }
 
     @Override

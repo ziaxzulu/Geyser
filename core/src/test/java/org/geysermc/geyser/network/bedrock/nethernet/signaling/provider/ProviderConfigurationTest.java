@@ -68,7 +68,7 @@ class ProviderConfigurationTest {
             ? List.of("127.0.0.1:3478", "[::1]:3478") : nxs.stunServers();
         return ProviderRuntimeConfiguration.resolve(
             new ProviderRuntimeConfiguration.Settings(nxs.endpoint(), nxs.token(), nxs.advertiseAddresses(), nxs.data(),
-                nxs.controlTransport(), nxs.diagnosticAdmission(), nxs.maintainedCandidates(), servers),
+                nxs.controlTransport(), nxs.diagnosticAdmission(), nxs.maintainedCandidates(), servers, nxs.assistedJoins()),
             dir, "::", 20000, 40, "Geyser");
     }
 
@@ -117,6 +117,7 @@ class ProviderConfigurationTest {
     void defaultsEnableMaintainedCandidatesAndAuthenticatedChecks(@TempDir Path dir) throws Exception {
         var result = resolve(config("{}"), dir);
         assertEquals(ProviderClient.ControlTransport.HTTP, result.controlTransport());
+        assertFalse(result.clientConfiguration().assistedJoins());
         assertTrue(result.maintainedCandidates());
         assertTrue(result.diagnosticAdmission());
         assertEquals(List.of("stun.cloudflare.com:3478"), config("{}").nxs().stunServers());
@@ -130,11 +131,13 @@ class ProviderConfigurationTest {
         var result = resolve(config("""
             nxs:
               control-transport: auto
+              assisted-joins: true
               maintained-candidates: true
               diagnostic-admission: true
               stun-servers: ['1.1.1.1:3478', '[2606:4700:4700::1111]:3478']
             """), dir);
         assertEquals(ProviderClient.ControlTransport.AUTO, result.clientConfiguration().controlTransport());
+        assertTrue(result.clientConfiguration().assistedJoins());
         assertTrue(result.clientConfiguration().diagnosticAdmission());
         assertEquals("discovered", result.clientConfiguration().connectivityMethod());
         assertEquals(2, result.stunServers().size());
@@ -161,6 +164,7 @@ class ProviderConfigurationTest {
 
     @Test
     void refusesMalformedSettingsAndAllowsExplicitStunOptOut(@TempDir Path dir) throws Exception {
+        assertThrows(IOException.class, () -> resolve(config("nxs:\n  assisted-joins: true\n"), dir));
         assertThrows(IOException.class, () -> config("nxs:\n  control-transport: websocket-only\n"));
         assertThrows(IOException.class, () -> resolve(config("nxs:\n  stun-servers: ['stun.example:0']\n"), dir));
         assertTrue(resolve(config("nxs:\n  maintained-candidates: false\n"), dir).stunServers().isEmpty());

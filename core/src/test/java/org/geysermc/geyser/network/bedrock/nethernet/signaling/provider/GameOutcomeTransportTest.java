@@ -27,10 +27,12 @@ package org.geysermc.geyser.network.bedrock.nethernet.signaling.provider;
 
 import com.google.gson.JsonObject;
 import org.cloudburstmc.netty.signaling.ProviderTransport;
+import org.cloudburstmc.netty.signaling.control.AssistedJoin;
 import org.cloudburstmc.netty.signaling.diagnostic.DiagnosticHostPolicy;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -39,6 +41,35 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 class GameOutcomeTransportTest {
+    @Test
+    void preservesAssistedReadinessAndOriginalOfferGuard() {
+        var nativeTransport = mock(ProviderTransport.class);
+        var join = mock(AssistedJoin.class);
+        var current = new AtomicBoolean(true);
+        Runnable requireCurrent = () -> {
+            if (!current.get()) throw new IllegalStateException("Control connection replaced");
+        };
+        var pending = new CompletableFuture<String>();
+        when(nativeTransport.supportsAssistedJoins()).thenReturn(true);
+        when(nativeTransport.assistedFallbackReadyFamilies()).thenReturn(Set.of(), Set.of(6));
+        when(nativeTransport.assistedJoin(join, requireCurrent)).thenReturn(pending);
+        var transport = new GameOutcomeTransport(nativeTransport, new GameOutcomeReporter());
+
+        assertTrue(transport.supportsAssistedJoins());
+        assertEquals(Set.of(), transport.assistedFallbackReadyFamilies());
+        assertEquals(Set.of(6), transport.assistedFallbackReadyFamilies());
+        var answer = transport.assistedJoin(join, requireCurrent);
+        assertSame(pending, answer);
+        assertFalse(answer.toCompletableFuture().isDone());
+        current.set(false);
+        var failure = assertThrows(IllegalStateException.class, requireCurrent::run);
+        pending.completeExceptionally(failure);
+        assertSame(failure, assertThrows(CompletionException.class, answer.toCompletableFuture()::join).getCause());
+        verify(nativeTransport).assistedJoin(same(join), same(requireCurrent));
+        verify(nativeTransport, never()).applyState(anyString());
+        verify(nativeTransport, never()).drain();
+    }
+
     @Test
     void preservesDelayedNativeSnapshotAndItsOriginalGuard() {
         var nativeTransport = mock(ProviderTransport.class);
