@@ -37,8 +37,8 @@ repositories {
             }
         }
         filter {
-            includeModule("dev.opencollab", "libdatachannel-java")
-            includeModule("dev.opencollab", "libdatachannel-java-arch-detect")
+            includeVersionByRegex("dev\\.opencollab", "libdatachannel-java(-arch-detect)?",
+                ".*-teamziax-connectivity-[0-9a-f]{12}-SNAPSHOT")
         }
     }
     // mavenLocal()
