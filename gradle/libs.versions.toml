@@ -18,8 +18,8 @@ protocol-common = "3.0.0.Beta13-20260828.182244-20"
 protocol-codec = "3.0.0.Beta13-20260828.182244-20"
 # CloudburstMC/Network, "nethernet" branch; RakNet and NetherNet come from the same build
 network = "2.0.0.CR3-SNAPSHOT"
-# opencollab-incubator/libdatachannel-java, which builds opencollab-incubator/libdatachannel and libjuice into its natives
-libdatachannel = "0.24.5.0-SNAPSHOT"
+# Temporary source-qualified TeamZiax package while the canonical native changes are upstreamed.
+libdatachannel = "0.24.5.0-teamziax-connectivity-8d2d2c0f7f07-SNAPSHOT"
 bouncycastle-pkix = "1.85"
 bouncycastle-prov = "1.85.2"
 minecraftauth = "5.0.0"
