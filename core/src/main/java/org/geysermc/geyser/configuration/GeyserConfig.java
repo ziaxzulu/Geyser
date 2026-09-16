@@ -197,16 +197,16 @@ public interface GeyserConfig {
             }
 
             @Comment("Maintain public UDP mappings on the gameplay socket. Direct endpoints are tried first per family; configured advertise-addresses disable STUN for both families.")
-            @DefaultBoolean(false)
+            @DefaultBoolean(true)
             boolean maintainedCandidates();
 
-            @Comment("Numeric STUN endpoints, at most one per family: IPv4:port and [IPv6]:port. Requires maintained-candidates; ignored when advertise-addresses is configured. Hostnames are not resolved here.")
+            @Comment("Up to two STUN host:port endpoints, resolved at startup. The first usable address per family is used. Ignored when maintained-candidates is false or advertise-addresses is configured; an empty list disables STUN.")
             default List<String> stunServers() {
-                return List.of();
+                return List.of("stun.cloudflare.com:3478");
             }
 
             @Comment("Allow authenticated provider connectivity probes on the gameplay socket. Tests WebRTC transport only; does not change player admission or serving state.")
-            @DefaultBoolean(false)
+            @DefaultBoolean(true)
             boolean diagnosticAdmission();
 
             @Comment("Bearer token or file:/path/to/token. Empty uses anonymous registration.")

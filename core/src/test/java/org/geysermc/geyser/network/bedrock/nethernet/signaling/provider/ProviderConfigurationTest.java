@@ -63,9 +63,12 @@ class ProviderConfigurationTest {
     private static ProviderRuntimeConfiguration resolve(GeyserConfig.SignalingConfig config, Path dir)
         throws IOException {
         var nxs = config.nxs();
+        // Network tests cover DNS itself; keep this embedding test independent of external DNS.
+        var servers = nxs.stunServers().equals(List.of("stun.cloudflare.com:3478"))
+            ? List.of("127.0.0.1:3478", "[::1]:3478") : nxs.stunServers();
         return ProviderRuntimeConfiguration.resolve(
             new ProviderRuntimeConfiguration.Settings(nxs.endpoint(), nxs.token(), nxs.advertiseAddresses(), nxs.data(),
-                nxs.controlTransport(), nxs.diagnosticAdmission(), nxs.maintainedCandidates(), nxs.stunServers()),
+                nxs.controlTransport(), nxs.diagnosticAdmission(), nxs.maintainedCandidates(), servers),
             dir, "::", 20000, 40, "Geyser");
     }
 
@@ -111,14 +114,15 @@ class ProviderConfigurationTest {
     }
 
     @Test
-    void optionalConnectivityKeepsExistingDefaults(@TempDir Path dir) throws Exception {
+    void defaultsEnableMaintainedCandidatesAndAuthenticatedChecks(@TempDir Path dir) throws Exception {
         var result = resolve(config("{}"), dir);
         assertEquals(ProviderClient.ControlTransport.HTTP, result.controlTransport());
-        assertFalse(result.maintainedCandidates());
-        assertFalse(result.diagnosticAdmission());
-        assertTrue(result.stunServers().isEmpty());
+        assertTrue(result.maintainedCandidates());
+        assertTrue(result.diagnosticAdmission());
+        assertEquals(List.of("stun.cloudflare.com:3478"), config("{}").nxs().stunServers());
+        assertEquals(2, result.stunServers().size());
         assertEquals(NativeProviderHostFactory.EXPLICIT_OR_PUBLIC_LOCAL, result.nativeHostOptions().get("endpointPolicy"));
-        assertFalse(result.nativeHostOptions().containsKey("candidatePublication"));
+        assertEquals(NativeProviderHostFactory.MAINTAINED_V1, result.nativeHostOptions().get("candidatePublication"));
     }
 
     @Test
@@ -156,9 +160,10 @@ class ProviderConfigurationTest {
     }
 
     @Test
-    void refusesUnsupportedCarriersAndUnresolvedOrDisabledStun(@TempDir Path dir) {
+    void refusesMalformedSettingsAndAllowsExplicitStunOptOut(@TempDir Path dir) throws Exception {
         assertThrows(IOException.class, () -> config("nxs:\n  control-transport: websocket-only\n"));
-        assertThrows(IOException.class, () -> resolve(config("nxs:\n  stun-servers: ['1.1.1.1:3478']\n"), dir));
-        assertThrows(IOException.class, () -> resolve(config("nxs:\n  maintained-candidates: true\n  stun-servers: ['stun.example:3478']\n"), dir));
+        assertThrows(IOException.class, () -> resolve(config("nxs:\n  stun-servers: ['stun.example:0']\n"), dir));
+        assertTrue(resolve(config("nxs:\n  maintained-candidates: false\n"), dir).stunServers().isEmpty());
+        assertTrue(resolve(config("nxs:\n  stun-servers: []\n"), dir).stunServers().isEmpty());
     }
 }
