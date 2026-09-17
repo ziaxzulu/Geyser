@@ -29,9 +29,13 @@ import com.google.gson.JsonObject;
 import org.cloudburstmc.netty.signaling.ProviderTransport;
 import org.cloudburstmc.netty.signaling.control.AssistedJoin;
 import org.cloudburstmc.netty.signaling.diagnostic.DiagnosticHostPolicy;
+import org.geysermc.geyser.GeyserLogger;
 
 import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletionStage;
 
@@ -41,10 +45,14 @@ import java.util.concurrent.CompletionStage;
 public final class GameOutcomeTransport implements ProviderTransport {
     private final ProviderTransport delegate;
     private final GameOutcomeReporter outcomes;
+    private final GeyserLogger logger;
+    private final Map<Integer, ConnectivityCheck> reportedChecks = new HashMap<>();
+    private long connectivityRevision;
 
-    public GameOutcomeTransport(ProviderTransport delegate, GameOutcomeReporter outcomes) {
+    public GameOutcomeTransport(ProviderTransport delegate, GameOutcomeReporter outcomes, GeyserLogger logger) {
         this.delegate = delegate;
         this.outcomes = outcomes;
+        this.logger = logger;
     }
 
     @Override
@@ -64,7 +72,42 @@ public final class GameOutcomeTransport implements ProviderTransport {
 
     @Override
     public CompletionStage<Void> reportConnectivityChecks(long candidateRevision, List<ConnectivityCheck> checks) {
-        return delegate.reportConnectivityChecks(candidateRevision, checks);
+        var delivered = delegate.reportConnectivityChecks(candidateRevision, checks);
+        var observed = List.copyOf(checks);
+        // Native delivery can successfully ignore a retired revision. Confirm it is still current before logging.
+        delivered.thenCompose(ignored -> delegate.captureHostProfile()).thenAccept(snapshot -> {
+            if (snapshot.candidateRevision() != candidateRevision) return;
+            snapshot.requireCurrent();
+            logConnectivityChecks(candidateRevision, observed);
+        });
+        return delivered;
+    }
+
+    private synchronized void logConnectivityChecks(long revision, List<ConnectivityCheck> checks) {
+        if (revision < 1 || revision < connectivityRevision) return;
+        if (revision != connectivityRevision) {
+            connectivityRevision = revision;
+            reportedChecks.clear();
+        }
+        long now = System.currentTimeMillis();
+        for (int family : List.of(4, 6)) {
+            var fresh = checks.stream().filter(check -> check.family() == family
+                    && check.checkedAt() <= now && check.expiresAt() > now).toList();
+            // One successful region establishes a usable path for this family.
+            var selected = fresh.stream().filter(check -> check.outcome() == ConnectivityOutcome.ESTABLISHED)
+                    .max(Comparator.comparingLong(ConnectivityCheck::checkedAt))
+                    .orElseGet(() -> fresh.stream().filter(check -> check.outcome() == ConnectivityOutcome.NOT_ESTABLISHED)
+                            .max(Comparator.comparingLong(ConnectivityCheck::checkedAt)).orElse(null));
+            var previous = reportedChecks.get(family);
+            if (selected == null || previous != null && selected.checkedAt() <= previous.checkedAt()) continue;
+            reportedChecks.put(family, selected);
+            if (previous != null && previous.outcome() == selected.outcome()) continue;
+            if (selected.outcome() == ConnectivityOutcome.ESTABLISHED) {
+                logger.info("NXS IPv" + family + " connectivity checks established the transport.");
+            } else {
+                logger.warning("NXS IPv" + family + " connectivity checks could not establish the transport. Assisted joins may still be available.");
+            }
+        }
     }
 
     @Override
