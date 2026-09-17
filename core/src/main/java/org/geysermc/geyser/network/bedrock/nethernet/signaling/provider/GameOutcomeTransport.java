@@ -36,7 +36,6 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.CompletionStage;
 
 /**
@@ -116,8 +115,8 @@ public final class GameOutcomeTransport implements ProviderTransport {
     }
 
     @Override
-    public Set<Integer> assistedFallbackReadyFamilies() {
-        return delegate.assistedFallbackReadyFamilies();
+    public CompletionStage<Void> configureStunServers(List<StunServer> servers) {
+        return delegate.configureStunServers(servers);
     }
 
     @Override

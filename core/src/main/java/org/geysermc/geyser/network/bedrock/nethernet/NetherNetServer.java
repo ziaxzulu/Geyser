@@ -311,7 +311,7 @@ public final class NetherNetServer implements EventRegistrar {
                 var nxs = config.nxs();
                 ProviderRuntimeConfiguration runtime = ProviderRuntimeConfiguration.resolve(
                     new ProviderRuntimeConfiguration.Settings(nxs.endpoint(), nxs.token(), nxs.advertiseAddresses(), nxs.data(),
-                        nxs.controlTransport(), nxs.diagnosticAdmission(), nxs.maintainedCandidates(), nxs.stunServers(), nxs.assistedJoins()),
+                        nxs.controlTransport(), nxs.diagnosticAdmission(), nxs.maintainedCandidates(), nxs.assistedJoins()),
                     dataFolder, listener.address(), webrtcPort, collectServerStatus().maxPlayers(), "Geyser");
                 URI origin = runtime.origin();
                 var statePath = runtime.stateDirectory();

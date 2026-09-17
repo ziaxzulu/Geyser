@@ -200,14 +200,9 @@ public interface GeyserConfig {
                 return List.of();
             }
 
-            @Comment("Maintain public UDP mappings on the gameplay socket. Direct endpoints are tried first per family; configured advertise-addresses disable STUN for both families.")
+            @Comment("Use provider-advertised STUN servers when a family has no public direct address. Mappings are offered to players only after a connectivity check passes. Configured advertise-addresses disable discovery and warming.")
             @DefaultBoolean(true)
             boolean maintainedCandidates();
-
-            @Comment("Up to two STUN host:port endpoints, resolved at startup. The first usable address per family is used. Ignored when maintained-candidates is false or advertise-addresses is configured; an empty list disables STUN.")
-            default List<String> stunServers() {
-                return List.of("stun.cloudflare.com:3478");
-            }
 
             @Comment("Allow authenticated provider connectivity probes on the gameplay socket. Tests WebRTC transport only; does not change player admission or serving state.")
             @DefaultBoolean(true)

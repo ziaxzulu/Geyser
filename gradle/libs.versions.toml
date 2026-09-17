@@ -17,7 +17,7 @@ protocol-connection = "3.0.0.Beta13-20260917.001841-27"
 protocol-common = "3.0.0.Beta13-20260917.001841-27"
 protocol-codec = "3.0.0.Beta13-20260917.001841-27"
 # Source-qualified Cloudburst Network fork build; RakNet and NetherNet come from the same build.
-network = "2.0.0.CR3-teamziax-connectivity-ab09ccd236e2-SNAPSHOT"
+network = "2.0.0.CR3-teamziax-connectivity-703fe0840a83-SNAPSHOT"
 # Temporary source-qualified TeamZiax package while the canonical native changes are upstreamed.
 libdatachannel = "0.24.5.0-teamziax-connectivity-8d2d2c0f7f07-SNAPSHOT"
 bouncycastle-pkix = "1.85"

@@ -25,6 +25,7 @@
 
 package org.geysermc.geyser.network.bedrock.nethernet.signaling.provider;
 
+import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import org.cloudburstmc.netty.signaling.ProviderTransport;
 import org.cloudburstmc.netty.signaling.control.AssistedJoin;
@@ -42,6 +43,12 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 class GameOutcomeTransportTest {
+    private static JsonObject profile() {
+        var profile = new JsonObject();
+        profile.add("candidates", new JsonArray());
+        return profile;
+    }
+
     @Test
     void logsFreshFamilyTransitionsWithoutRepeatingOrReplayingOldChecks() {
         var nativeTransport = mock(ProviderTransport.class);
@@ -49,7 +56,7 @@ class GameOutcomeTransportTest {
         when(nativeTransport.reportConnectivityChecks(anyLong(), anyList()))
                 .thenReturn(CompletableFuture.completedFuture(null));
         when(nativeTransport.captureHostProfile()).thenReturn(CompletableFuture.completedFuture(
-                new ProviderTransport.HostProfileSnapshot(new JsonObject(), 1, () -> { })));
+                new ProviderTransport.HostProfileSnapshot(profile(), 1, () -> { })));
         var transport = new GameOutcomeTransport(nativeTransport, new GameOutcomeReporter(), logger);
         long now = System.currentTimeMillis();
         var failed4 = new ProviderTransport.ConnectivityCheck(4, ProviderTransport.ConnectivityOutcome.NOT_ESTABLISHED, now - 3000, now + 60000);
@@ -72,7 +79,7 @@ class GameOutcomeTransportTest {
         verify(logger, times(1)).info(contains("IPv4"));
         verify(logger, times(1)).warning(contains("IPv4"));
         when(nativeTransport.captureHostProfile()).thenReturn(CompletableFuture.completedFuture(
-                new ProviderTransport.HostProfileSnapshot(new JsonObject(), 2, () -> { })));
+                new ProviderTransport.HostProfileSnapshot(profile(), 2, () -> { })));
         transport.reportConnectivityChecks(2, List.of(failed4));
         transport.reportConnectivityChecks(1, List.of(good4));
         verify(logger, times(2)).warning(contains("IPv4"));
@@ -103,20 +110,20 @@ class GameOutcomeTransportTest {
         when(nativeTransport.reportConnectivityChecks(anyLong(), anyList()))
                 .thenReturn(CompletableFuture.completedFuture(null));
         when(nativeTransport.captureHostProfile()).thenReturn(CompletableFuture.completedFuture(
-                new ProviderTransport.HostProfileSnapshot(new JsonObject(), 2, () -> { })));
+                new ProviderTransport.HostProfileSnapshot(profile(), 2, () -> { })));
         var transport = new GameOutcomeTransport(nativeTransport, new GameOutcomeReporter(), logger);
         long now = System.currentTimeMillis();
         var failed = new ProviderTransport.ConnectivityCheck(4, ProviderTransport.ConnectivityOutcome.NOT_ESTABLISHED, now - 1, now + 60000);
         transport.reportConnectivityChecks(1, List.of(failed));
         verifyNoInteractions(logger);
         when(nativeTransport.captureHostProfile()).thenReturn(CompletableFuture.completedFuture(
-                new ProviderTransport.HostProfileSnapshot(new JsonObject(), 2, () -> { throw new IllegalStateException("retired"); })));
+                new ProviderTransport.HostProfileSnapshot(profile(), 2, () -> { throw new IllegalStateException("retired"); })));
         transport.reportConnectivityChecks(2, List.of(failed));
         verifyNoInteractions(logger);
     }
 
     @Test
-    void preservesAssistedReadinessAndOriginalOfferGuard() {
+    void preservesAssistedSupportAndOriginalOfferGuard() {
         var nativeTransport = mock(ProviderTransport.class);
         var join = mock(AssistedJoin.class);
         var current = new AtomicBoolean(true);
@@ -125,13 +132,10 @@ class GameOutcomeTransportTest {
         };
         var pending = new CompletableFuture<String>();
         when(nativeTransport.supportsAssistedJoins()).thenReturn(true);
-        when(nativeTransport.assistedFallbackReadyFamilies()).thenReturn(Set.of(), Set.of(6));
         when(nativeTransport.assistedJoin(join, requireCurrent)).thenReturn(pending);
         var transport = new GameOutcomeTransport(nativeTransport, new GameOutcomeReporter(), mock(GeyserLogger.class));
 
         assertTrue(transport.supportsAssistedJoins());
-        assertEquals(Set.of(), transport.assistedFallbackReadyFamilies());
-        assertEquals(Set.of(6), transport.assistedFallbackReadyFamilies());
         var answer = transport.assistedJoin(join, requireCurrent);
         assertSame(pending, answer);
         assertFalse(answer.toCompletableFuture().isDone());
@@ -156,16 +160,39 @@ class GameOutcomeTransportTest {
         assertSame(pending, captured);
         assertFalse(captured.toCompletableFuture().isDone());
         var current = new AtomicBoolean(true);
-        var snapshot = new ProviderTransport.HostProfileSnapshot(new JsonObject(), 3, 7, () -> {
+        var probes = new JsonArray();
+        var probe = new JsonObject();
+        probe.addProperty("address", "203.0.113.20");
+        probes.add(probe);
+        var snapshot = new ProviderTransport.HostProfileSnapshot(profile(), 3, 7, probes, Set.of(6), () -> {
             if (!current.get()) throw new IllegalStateException("Native mapping expired or replaced");
         });
         pending.complete(snapshot);
         assertSame(snapshot, captured.toCompletableFuture().join());
+        assertEquals(probes, captured.toCompletableFuture().join().probeCandidates());
+        assertEquals(Set.of(6), captured.toCompletableFuture().join().assistedFamilies());
         assertEquals(7, transport.candidatePublicationVersion());
         captured.toCompletableFuture().join().requireCurrent();
         current.set(false);
         assertThrows(IllegalStateException.class, captured.toCompletableFuture().join()::requireCurrent);
         verify(nativeTransport, never()).hostProfile();
+    }
+
+    @Test
+    void providerStunDiscoveryWaitsForNativeConfigurationAndPreservesFailure() {
+        var nativeTransport = mock(ProviderTransport.class);
+        var servers = List.of(new ProviderTransport.StunServer("stun.example", 3478));
+        var pending = new CompletableFuture<Void>();
+        when(nativeTransport.configureStunServers(servers)).thenReturn(pending);
+        var transport = new GameOutcomeTransport(nativeTransport, new GameOutcomeReporter(), mock(GeyserLogger.class));
+
+        var configured = transport.configureStunServers(servers);
+        assertSame(pending, configured);
+        assertFalse(configured.toCompletableFuture().isDone());
+        var failure = new IllegalStateException("Native listener unavailable");
+        pending.completeExceptionally(failure);
+        assertSame(failure, assertThrows(CompletionException.class, configured.toCompletableFuture()::join).getCause());
+        verify(nativeTransport).configureStunServers(same(servers));
     }
 
     @Test
