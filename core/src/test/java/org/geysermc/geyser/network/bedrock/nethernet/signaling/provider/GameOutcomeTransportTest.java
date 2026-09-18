@@ -50,68 +50,6 @@ class GameOutcomeTransportTest {
     }
 
     @Test
-    void logsFreshFamilyTransitionsWithoutRepeatingOrReplayingOldChecks() {
-        var nativeTransport = mock(ProviderTransport.class);
-        var logger = mock(GeyserLogger.class);
-        when(nativeTransport.reportConnectivityChecks(anyLong(), anyList()))
-                .thenReturn(CompletableFuture.completedFuture(null));
-        when(nativeTransport.captureHostProfile()).thenReturn(CompletableFuture.completedFuture(
-                new ProviderTransport.HostProfileSnapshot(profile(), 1, () -> { })));
-        var transport = new GameOutcomeTransport(nativeTransport, new GameOutcomeReporter(), logger, false);
-        long now = System.currentTimeMillis();
-        var failed4 = new ProviderTransport.ConnectivityCheck(4, ProviderTransport.ConnectivityOutcome.NOT_ESTABLISHED, now - 3000, now + 60000);
-        var good6 = new ProviderTransport.ConnectivityCheck(6, ProviderTransport.ConnectivityOutcome.ESTABLISHED, now - 3000, now + 60000);
-        var unknown4 = new ProviderTransport.ConnectivityCheck(4, ProviderTransport.ConnectivityOutcome.UNKNOWN, now - 2000, now + 60000);
-        var expired = new ProviderTransport.ConnectivityCheck(4, ProviderTransport.ConnectivityOutcome.NOT_ESTABLISHED, now - 4000, now - 1000);
-        var future = new ProviderTransport.ConnectivityCheck(6, ProviderTransport.ConnectivityOutcome.NOT_ESTABLISHED, now + 60000, now + 120000);
-        transport.reportConnectivityChecks(1, List.of(unknown4, expired, future));
-        verifyNoInteractions(logger);
-
-        transport.reportConnectivityChecks(1, List.of(failed4, good6));
-        transport.reportConnectivityChecks(1, List.of(failed4, good6));
-        transport.reportConnectivityChecks(1, List.of());
-        transport.reportConnectivityChecks(1, List.of(unknown4));
-        verify(logger, times(1)).warning(contains("IPv4"));
-        verify(logger).warning(contains("set assisted-joins: true and control-transport: auto under bedrock.signaling.nxs"));
-        verify(logger, times(1)).info(contains("IPv6"));
-
-        var good4 = new ProviderTransport.ConnectivityCheck(4, ProviderTransport.ConnectivityOutcome.ESTABLISHED, now - 1000, now + 60000);
-        transport.reportConnectivityChecks(1, List.of(good4));
-        transport.reportConnectivityChecks(1, List.of(failed4));
-        verify(logger, times(1)).info(contains("IPv4"));
-        verify(logger, times(1)).warning(contains("IPv4"));
-        when(nativeTransport.captureHostProfile()).thenReturn(CompletableFuture.completedFuture(
-                new ProviderTransport.HostProfileSnapshot(profile(), 2, () -> { })));
-        transport.reportConnectivityChecks(2, List.of(failed4));
-        transport.reportConnectivityChecks(1, List.of(good4));
-        verify(logger, times(2)).warning(contains("IPv4"));
-        verify(logger, times(1)).info(contains("IPv4"));
-        verify(logger, never()).warning(contains("IPv6"));
-    }
-
-    @Test
-    void enabledAssistanceDoesNotTreatFailedRegionalChecksAsUniversalClientFailure() {
-        var nativeTransport = mock(ProviderTransport.class);
-        var logger = mock(GeyserLogger.class);
-        when(nativeTransport.reportConnectivityChecks(anyLong(), anyList()))
-                .thenReturn(CompletableFuture.completedFuture(null));
-        when(nativeTransport.captureHostProfile()).thenReturn(CompletableFuture.completedFuture(
-                new ProviderTransport.HostProfileSnapshot(profile(), 1, () -> { })));
-        var transport = new GameOutcomeTransport(nativeTransport, new GameOutcomeReporter(), logger, true);
-        long now = System.currentTimeMillis();
-        var failed4 = new ProviderTransport.ConnectivityCheck(4, ProviderTransport.ConnectivityOutcome.NOT_ESTABLISHED, now - 1, now + 60000);
-        var failed6 = new ProviderTransport.ConnectivityCheck(6, ProviderTransport.ConnectivityOutcome.NOT_ESTABLISHED, now - 1, now + 60000);
-
-        transport.reportConnectivityChecks(1, List.of(failed4, failed6));
-        transport.reportConnectivityChecks(1, List.of(failed4, failed6));
-
-        verify(logger).warning("NXS IPv4 connectivity checks could not establish the transport. Assisted joining is enabled; connectivity may differ for clients with other reachable addresses.");
-        verify(logger).warning("NXS IPv6 connectivity checks could not establish the transport. Assisted joining is enabled; connectivity may differ for clients with other reachable addresses.");
-        verifyNoMoreInteractions(logger);
-        verify(nativeTransport, never()).applyState(anyString());
-    }
-
-    @Test
     void doesNotLogFeedbackUntilNativeDeliverySucceeds() {
         var nativeTransport = mock(ProviderTransport.class);
         var logger = mock(GeyserLogger.class);

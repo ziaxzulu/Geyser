@@ -335,7 +335,8 @@ public final class NetherNetServer implements EventRegistrar {
                     return;
                 }
                 initializingTransport = transport;
-                transport = new GameOutcomeTransport(transport, gameOutcomes, logger(), runtime.clientConfiguration().assistedJoins());
+                transport = new GameOutcomeTransport(transport, gameOutcomes, logger(), runtime.clientConfiguration().assistedJoins(),
+                    nxs.diagnosticAdmission(), nxs.maintainedCandidates(), runtime.udpPort());
                 ProviderClient client = new ProviderClient(runtime.clientConfiguration(), store, transport,
                         () -> providerStatusSupplier.get(), () -> health(runtime.capacity()), message -> logger().warning(message));
                 store = null; // ProviderClient now owns its lifetime.

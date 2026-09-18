@@ -32,10 +32,7 @@ import org.cloudburstmc.netty.signaling.diagnostic.DiagnosticHostPolicy;
 import org.geysermc.geyser.GeyserLogger;
 
 import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.CompletionStage;
 
 /**
@@ -44,16 +41,17 @@ import java.util.concurrent.CompletionStage;
 public final class GameOutcomeTransport implements ProviderTransport {
     private final ProviderTransport delegate;
     private final GameOutcomeReporter outcomes;
-    private final GeyserLogger logger;
-    private final boolean assistedJoins;
-    private final Map<Integer, ConnectivityCheck> reportedChecks = new HashMap<>();
-    private long connectivityRevision;
+    private final ConnectivityReporter connectivity;
 
     public GameOutcomeTransport(ProviderTransport delegate, GameOutcomeReporter outcomes, GeyserLogger logger, boolean assistedJoins) {
+        this(delegate, outcomes, logger, assistedJoins, true, true, 0);
+    }
+
+    public GameOutcomeTransport(ProviderTransport delegate, GameOutcomeReporter outcomes, GeyserLogger logger,
+                                boolean assistedJoins, boolean diagnostics, boolean warming, int udpPort) {
         this.delegate = delegate;
         this.outcomes = outcomes;
-        this.logger = logger;
-        this.assistedJoins = assistedJoins;
+        this.connectivity = new ConnectivityReporter(logger, assistedJoins, diagnostics, warming, udpPort);
     }
 
     @Override
@@ -63,7 +61,9 @@ public final class GameOutcomeTransport implements ProviderTransport {
 
     @Override
     public CompletionStage<HostProfileSnapshot> captureHostProfile() {
-        return delegate.captureHostProfile();
+        var captured = delegate.captureHostProfile();
+        captured.thenAccept(connectivity::publication);
+        return captured;
     }
 
     @Override
@@ -79,39 +79,9 @@ public final class GameOutcomeTransport implements ProviderTransport {
         delivered.thenCompose(ignored -> delegate.captureHostProfile()).thenAccept(snapshot -> {
             if (snapshot.candidateRevision() != candidateRevision) return;
             snapshot.requireCurrent();
-            logConnectivityChecks(candidateRevision, observed);
+            connectivity.checks(snapshot, observed);
         });
         return delivered;
-    }
-
-    private synchronized void logConnectivityChecks(long revision, List<ConnectivityCheck> checks) {
-        if (revision < 1 || revision < connectivityRevision) return;
-        if (revision != connectivityRevision) {
-            connectivityRevision = revision;
-            reportedChecks.clear();
-        }
-        long now = System.currentTimeMillis();
-        for (int family : List.of(4, 6)) {
-            var fresh = checks.stream().filter(check -> check.family() == family
-                    && check.checkedAt() <= now && check.expiresAt() > now).toList();
-            // One successful region establishes a usable path for this family.
-            var selected = fresh.stream().filter(check -> check.outcome() == ConnectivityOutcome.ESTABLISHED)
-                    .max(Comparator.comparingLong(ConnectivityCheck::checkedAt))
-                    .orElseGet(() -> fresh.stream().filter(check -> check.outcome() == ConnectivityOutcome.NOT_ESTABLISHED)
-                            .max(Comparator.comparingLong(ConnectivityCheck::checkedAt)).orElse(null));
-            var previous = reportedChecks.get(family);
-            if (selected == null || previous != null && selected.checkedAt() <= previous.checkedAt()) continue;
-            reportedChecks.put(family, selected);
-            if (previous != null && previous.outcome() == selected.outcome()) continue;
-            if (selected.outcome() == ConnectivityOutcome.ESTABLISHED) {
-                logger.info("NXS IPv" + family + " connectivity checks established the transport.");
-            } else {
-                logger.warning("NXS IPv" + family + " connectivity checks could not establish the transport. "
-                    + (assistedJoins
-                        ? "Assisted joining is enabled; connectivity may differ for clients with other reachable addresses."
-                        : "To allow assisted player connections, set assisted-joins: true and control-transport: auto under bedrock.signaling.nxs."));
-            }
-        }
     }
 
     @Override

@@ -162,6 +162,7 @@ class ProviderConfigurationTest {
         assertThrows(IOException.class, () -> config("nxs:\n  control-transport: websocket-only\n"));
         var optedOut = resolve(config("nxs:\n  maintained-candidates: false\n"), dir);
         assertFalse(optedOut.maintainedCandidates());
-        assertFalse(optedOut.nativeHostOptions().containsKey("candidatePublication"));
+        assertEquals(NativeProviderHostFactory.MAINTAINED_V1, optedOut.nativeHostOptions().get("candidatePublication"));
+        assertEquals("false", optedOut.nativeHostOptions().get("stunWarming"));
     }
 }
