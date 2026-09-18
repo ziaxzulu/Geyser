@@ -26,36 +26,6 @@ dependencies {
 }
 
 repositories {
-    exclusiveContent {
-        forRepository {
-            maven("https://maven.pkg.github.com/ziaxzulu/network") {
-                name = "connectivityNetwork"
-                credentials {
-                    username = System.getenv("GITHUB_PACKAGES_USERNAME")
-                    password = System.getenv("GITHUB_PACKAGES_TOKEN")
-                }
-            }
-        }
-        filter {
-            includeVersionByRegex("org\\.cloudburstmc\\.netty", "netty-(transport-raknet|transport-nethernet|external-signaling)",
-                ".*-teamziax-connectivity-[0-9a-f]{12}-SNAPSHOT")
-        }
-    }
-    exclusiveContent {
-        forRepository {
-            maven("https://maven.pkg.github.com/teamziax/libdatachannel-java") {
-                name = "connectivityNative"
-                credentials {
-                    username = System.getenv("GITHUB_PACKAGES_USERNAME")
-                    password = System.getenv("GITHUB_PACKAGES_TOKEN")
-                }
-            }
-        }
-        filter {
-            includeVersionByRegex("dev\\.opencollab", "libdatachannel-java(-arch-detect)?",
-                ".*-teamziax-connectivity-[0-9a-f]{12}-SNAPSHOT")
-        }
-    }
     // mavenLocal()
 
     mavenCentral()

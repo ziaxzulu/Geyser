@@ -115,6 +115,7 @@ class ProviderConfigurationTest {
         var result = resolve(config("{}"), dir);
         assertEquals(ProviderClient.ControlTransport.HTTP, result.controlTransport());
         assertFalse(result.clientConfiguration().assistedJoins());
+        assertEquals("false", result.nativeHostOptions().get("assistedJoins"));
         assertTrue(result.maintainedCandidates());
         assertTrue(result.diagnosticAdmission());
         assertFalse(result.nativeHostOptions().containsKey("stunServers"));
@@ -133,6 +134,7 @@ class ProviderConfigurationTest {
             """), dir);
         assertEquals(ProviderClient.ControlTransport.AUTO, result.clientConfiguration().controlTransport());
         assertTrue(result.clientConfiguration().assistedJoins());
+        assertEquals("true", result.nativeHostOptions().get("assistedJoins"));
         assertTrue(result.clientConfiguration().diagnosticAdmission());
         assertEquals("discovered", result.clientConfiguration().connectivityMethod());
         var options = result.nativeHostOptions();
