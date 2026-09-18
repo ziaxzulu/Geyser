@@ -36,6 +36,7 @@ import java.time.Instant;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 /** Operator-facing observations of host policy; this reporter never changes serving or admission. */
 final class ConnectivityReporter {
@@ -43,8 +44,10 @@ final class ConnectivityReporter {
     private final GeyserLogger logger;
     private final boolean assisted, diagnostics, warming;
     private final String port;
-    private final Map<Key, ConnectivityCheck> reported = new HashMap<>();
+    private record Observation(long revision, ConnectivityCheck check) { }
+    private final Map<Key, Observation> reported = new HashMap<>();
     private final Map<Integer, String> publications = new HashMap<>();
+    private final Map<Integer, Boolean> available = new HashMap<>();
     private long revision;
     private boolean announced;
 
@@ -53,18 +56,15 @@ final class ConnectivityReporter {
         this.assisted = assisted;
         this.diagnostics = diagnostics;
         this.warming = warming;
-        this.port = udpPort > 0 ? Integer.toString(udpPort) : "the NetherNet gameplay port";
+        this.port = udpPort > 0 ? "UDP port " + udpPort : "the NetherNet UDP port";
     }
 
     synchronized void publication(HostProfileSnapshot snapshot) {
         snapshot.requireCurrent();
         if (!announced) {
             announced = true;
-            logger.info("NXS connectivity policy: assisted joins " + (assisted ? "enabled" : "disabled")
-                + "; maintenance checks " + (diagnostics ? "enabled" : "disabled")
-                + "; background STUN " + (assisted ? "replaced by discovery during each assisted join" : warming ? "enabled for automatically discovered endpoints" : "disabled") + ".");
-            if (!diagnostics) logger.warning("NXS connectivity checks are disabled; offered endpoints cannot be verified or withdrawn after probe failures. "
-                + "Set diagnostic-admission: true under bedrock.signaling.nxs to enable maintenance checks.");
+            logger.debug("NXS settings: assisted joins=" + assisted + "; checks=" + diagnostics + "; background discovery=" + warming + ".");
+            if (!diagnostics) logger.warning("NXS connection checks are turned off. Server reachability cannot be checked.");
         }
         for (int family : List.of(4, 6)) {
             var offered = endpoints(snapshot.profile().getAsJsonArray("candidates"), family);
@@ -72,65 +72,61 @@ final class ConnectivityReporter {
             boolean assist = assisted && snapshot.assistedFamilies().contains(family);
             String decision = "offered=" + offered + "; test targets=" + probes + "; assisted=" + assist;
             if (decision.equals(publications.put(family, decision))) continue;
-            logger.info("NXS IPv" + family + " publication: " + decision + ". "
-                + (assist ? "Public peers can also be discovered during assisted joins. " : "")
-                + "Private addresses are usable only on reachable LAN/VPN networks. "
-                + (probes.stream().anyMatch(target -> !offered.contains(target))
-                    ? "Withdrawn endpoints remain under maintenance checks; a successful check restores the endpoint." : ""));
+            boolean usable = !offered.isEmpty() || assist;
+            Boolean wasAvailable = available.put(family, usable);
+            if (!Objects.equals(wasAvailable, usable)) {
+                if (usable) logger.info("NXS IPv" + family + " is available for player connections.");
+                else if (Boolean.TRUE.equals(wasAvailable) || !probes.isEmpty())
+                    logger.warning("NXS IPv" + family + " has no available player address."
+                        + (diagnostics ? " Connection checks will continue." : ""));
+            }
+            logger.debug("NXS IPv" + family + " addresses: " + decision + ".");
         }
     }
 
     synchronized void checks(HostProfileSnapshot snapshot, List<ConnectivityCheck> checks) {
         snapshot.requireCurrent();
         if (snapshot.candidateRevision() < revision) return;
-        if (snapshot.candidateRevision() != revision) {
-            revision = snapshot.candidateRevision();
-            reported.clear();
-        }
+        revision = snapshot.candidateRevision();
         publication(snapshot);
         long now = System.currentTimeMillis();
         for (var check : checks.stream().sorted(java.util.Comparator.comparingLong(ConnectivityCheck::checkedAt)).toList()) {
             if (check.checkedAt() > now || check.expiresAt() <= now) continue;
             var key = new Key(check.region(), check.family(), check.method());
-            var previous = reported.get(key);
-            if (previous != null && previous.checkedAt() >= check.checkedAt()) continue;
-            reported.put(key, check);
+            var observation = reported.get(key);
+            var previous = observation == null ? null : observation.check();
+            if (observation != null && observation.revision() == revision && previous.checkedAt() >= check.checkedAt()) continue;
+            reported.put(key, new Observation(revision, check));
             String result = switch (check.outcome()) {
                 case ESTABLISHED -> "passed";
                 case NOT_ESTABLISHED -> "failed";
                 case UNKNOWN -> "was inconclusive";
-                case UNAVAILABLE -> "was unavailable";
+                case UNAVAILABLE -> "could not run";
             };
-            String message = "NXS IPv" + check.family() + " " + method(check.method()) + " check from " + check.region()
-                + (check.target() == null ? " (no public peer recorded)" : " to " + endpoint(check.target()))
-                + " " + result + " at " + Instant.ofEpochMilli(check.checkedAt()) + ". ";
-            boolean assist = assisted && snapshot.assistedFamilies().contains(check.family());
-            boolean offered = check.target() != null && endpoints(snapshot.profile().getAsJsonArray("candidates"), check.family()).contains(endpoint(check.target()));
-            if (check.outcome() == ConnectivityOutcome.ESTABLISHED) {
-                message += "Transport established from this region; other client networks can differ. "
-                    + (assist ? "Assisted joins remain available." : offered ? "The tested endpoint is offered to players." : "The current publication is shown above.");
+            String message = "NXS IPv" + check.family() + " " + method(check.method()) + " connection check from " + check.region()
+                + " " + result + ".";
+            // An assisted check discovers a temporary peer each time; that is not a new operator-visible result.
+            boolean unchanged = previous != null && previous.outcome() == check.outcome()
+                && ("per_join".equals(check.method()) || Objects.equals(previous.target(), check.target()));
+            if (unchanged) {
+                logger.debug(message);
+            } else if (check.outcome() == ConnectivityOutcome.ESTABLISHED) {
                 logger.info(message);
             } else if (check.outcome() == ConnectivityOutcome.NOT_ESTABLISHED) {
-                message += assist
-                    ? "Assisted IPv" + check.family() + " remains available. Clients on networks similar to this probe are unlikely to connect; clients with a public address or less restrictive NAT may still connect."
-                    : check.target() == null ? "No tested public endpoint was recorded, so this result does not withdraw an endpoint."
-                    : offered ? "The endpoint remains offered because another region has a successful check."
-                    : "The failed public endpoint is withheld from player offers. Maintenance checks continue; a successful check restores it.";
-                // Every completed check is logged; repeat long configuration advice only on a result transition.
-                if (previous == null || previous.outcome() != check.outcome() || !java.util.Objects.equals(previous.target(), check.target())) message += " " + guidance(check.family(), assist);
-                logger.warning(message);
+                boolean assist = assisted && snapshot.assistedFamilies().contains(check.family());
+                boolean offered = check.target() != null && endpoints(snapshot.profile().getAsJsonArray("candidates"), check.family()).contains(endpoint(check.target()));
+                String impact = assist ? " Some players may still be able to connect."
+                    : check.target() == null ? " Player addresses are unchanged."
+                    : offered ? " Other regions can still reach this address."
+                    : " This address is temporarily unavailable to players.";
+                logger.warning(message + impact + " Check " + port + " in your firewall. See docs/nxs-connectivity.md for help.");
             } else {
-                logger.warning(message + "This does not establish a connectivity failure; the publication decision is unchanged. "
-                    + "Check provider/control connectivity and diagnostic-admission; wait for the next completed check.");
+                logger.warning(message + " Player addresses are unchanged. Checks will retry automatically.");
             }
+            logger.debug("NXS check details: region=" + check.region() + "; family=IPv" + check.family()
+                + "; method=" + check.method() + "; target=" + (check.target() == null ? "unknown" : endpoint(check.target()))
+                + "; result=" + check.outcome() + "; checkedAt=" + Instant.ofEpochMilli(check.checkedAt()) + ".");
         }
-    }
-
-    private String guidance(int family, boolean assist) {
-        return "Next: check the host firewall for UDP " + port + (family == 4
-            ? "; forward that UDP port through each NAT and set advertise-addresses to the reachable public endpoint when using a fixed mapping. If behind CGNAT, request a public IPv4 address from the ISP or use public IPv6."
-            : "; verify that the advertised IPv6 address is globally routed and that the router allows inbound UDP. IPv6 does not need IPv4 port forwarding.")
-            + (!assist ? " Alternatively, set assisted-joins: true and control-transport: auto under bedrock.signaling.nxs; assistance may help but cannot guarantee a connection." : "");
     }
 
     private static List<String> endpoints(JsonArray candidates, int family) {
@@ -140,13 +136,13 @@ final class ConnectivityReporter {
             .map(value -> {
                 String address = value.get("address").getAsString();
                 return (family == 6 ? "[" + address + "]" : address) + ":" + value.get("port").getAsInt();
-            }).toList();
+            }).sorted().toList();
     }
     private static String endpoint(InetSocketAddress target) {
         String address = target.getAddress().getHostAddress();
         return (address.contains(":") ? "[" + address + "]" : address) + ":" + target.getPort();
     }
     private static String method(String value) {
-        return switch (value) { case "per_join" -> "Assisted"; case "warm_stun" -> "Warm STUN"; default -> "Direct"; };
+        return switch (value) { case "per_join" -> "assisted"; case "warm_stun" -> "automatically discovered"; default -> "direct"; };
     }
 }

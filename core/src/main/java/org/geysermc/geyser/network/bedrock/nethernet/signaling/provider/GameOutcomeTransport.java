@@ -42,6 +42,7 @@ public final class GameOutcomeTransport implements ProviderTransport {
     private final ProviderTransport delegate;
     private final GameOutcomeReporter outcomes;
     private final ConnectivityReporter connectivity;
+    private final GeyserLogger logger;
 
     public GameOutcomeTransport(ProviderTransport delegate, GameOutcomeReporter outcomes, GeyserLogger logger, boolean assistedJoins) {
         this(delegate, outcomes, logger, assistedJoins, true, true, 0);
@@ -51,6 +52,7 @@ public final class GameOutcomeTransport implements ProviderTransport {
                                 boolean assistedJoins, boolean diagnostics, boolean warming, int udpPort) {
         this.delegate = delegate;
         this.outcomes = outcomes;
+        this.logger = logger;
         this.connectivity = new ConnectivityReporter(logger, assistedJoins, diagnostics, warming, udpPort);
     }
 
@@ -137,6 +139,14 @@ public final class GameOutcomeTransport implements ProviderTransport {
     @Override
     public List<JsonObject> pollEvents() {
         List<JsonObject> batch = new ArrayList<>(delegate.pollEvents());
+        // Native player failures are separate from maintenance checks. Report each new attempt,
+        // even when the last player also failed. Assisted setup errors are logged by the control carrier.
+        for (JsonObject event : batch) {
+            if (!event.has("stage") || !"ticket.failed".equals(event.get("stage").getAsString())) continue;
+            String reason = event.has("reason") ? event.get("reason").getAsString() : "";
+            if (!"assisted_failed".equals(reason) && !"assisted_answer_failed".equals(reason))
+                logger.warning("NXS: A player could not connect to the server.");
+        }
         outcomes.drainTo(batch, Math.max(0, 100 - batch.size()));
         return batch;
     }

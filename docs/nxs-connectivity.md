@@ -1,9 +1,18 @@
 # NXS connectivity checks and player offers
 
-Geyser logs each new maintenance check with its region, IP family, method,
-attempted public endpoint (when known), outcome, and check time. The same result
-returned by later heartbeats is not logged again. Publication changes are logged
-separately. These checks establish transport; they do not test gameplay.
+Geyser logs the first successful check and recovery at info, and a new failed,
+inconclusive or unavailable check at warn. Further checks with the same outcome
+are debug-only, separately for each region, IP family and method. A new fixed
+endpoint is checked independently; temporary assisted-join addresses do not
+repeat warnings. Repeated heartbeat copies and older results are ignored.
+
+Connection failures follow the same pattern: one warning, debug-only retries,
+and one info message when that operation recovers. An unrelated successful
+request does not clear the failure. Debug logging is off by default; enable
+`debug-mode` to see check addresses, methods, times, settings and retries.
+Each failed player assisted join still produces a warning, including repeated
+player attempts. This is separate from background check suppression.
+These checks test the connection path, not gameplay.
 
 | Result | Assisted joins enabled | Assisted joins disabled |
 | --- | --- | --- |

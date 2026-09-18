@@ -58,6 +58,7 @@ import org.geysermc.geyser.event.type.SessionDisconnectEventImpl;
 import org.geysermc.geyser.network.BedrockPingHandler;
 import org.geysermc.geyser.network.bedrock.nethernet.signaling.provider.GameOutcomeReporter;
 import org.geysermc.geyser.network.bedrock.nethernet.signaling.provider.GameOutcomeTransport;
+import org.geysermc.geyser.network.bedrock.nethernet.signaling.provider.ProviderLogging;
 import org.geysermc.geyser.network.bedrock.nethernet.signaling.provider.GeyserStatusCollector;
 import org.cloudburstmc.netty.signaling.provider.NativeProviderHostFactory;
 import org.cloudburstmc.netty.signaling.provider.ProviderHostFactory;
@@ -338,7 +339,7 @@ public final class NetherNetServer implements EventRegistrar {
                 transport = new GameOutcomeTransport(transport, gameOutcomes, logger(), runtime.clientConfiguration().assistedJoins(),
                     nxs.diagnosticAdmission(), nxs.maintainedCandidates(), runtime.udpPort());
                 ProviderClient client = new ProviderClient(runtime.clientConfiguration(), store, transport,
-                        () -> providerStatusSupplier.get(), () -> health(runtime.capacity()), message -> logger().warning(message));
+                        () -> providerStatusSupplier.get(), () -> health(runtime.capacity()), new ProviderLogging(logger()));
                 store = null; // ProviderClient now owns its lifetime.
                 initializingTransport = null;
                 synchronized (providerLifecycle) {
@@ -363,7 +364,7 @@ public final class NetherNetServer implements EventRegistrar {
                     }
                     logger().info(registrationMessage(registration));
                     // Says where logins are vouched for, without putting provider credentials in the log
-                    logger().info("NetherNet client identities are authenticated by external signaling provider "
+                    logger().debug("NetherNet client identities are authenticated by external signaling provider "
                         + origin.getHost() + "; direct login keys are checked against its admission tickets");
                     WardenClaimAdapter claim = wardenClaim;
                     if (claim != null)

@@ -50,6 +50,25 @@ class GameOutcomeTransportTest {
     }
 
     @Test
+    void everyFailedPlayerConnectionWarnsWithoutRepeatingAssistedSetupErrors() {
+        var nativeTransport = mock(ProviderTransport.class);
+        var logger = mock(GeyserLogger.class);
+        var first = new JsonObject();
+        first.addProperty("stage", "ticket.failed"); first.addProperty("reason", "timeout");
+        var second = new JsonObject();
+        second.addProperty("stage", "ticket.failed"); second.addProperty("reason", "closed");
+        var setup = new JsonObject();
+        setup.addProperty("stage", "ticket.failed"); setup.addProperty("reason", "assisted_answer_failed");
+        when(nativeTransport.pollEvents()).thenReturn(List.of(first), List.of(second, setup), List.of());
+        var transport = new GameOutcomeTransport(nativeTransport, new GameOutcomeReporter(), logger, true);
+        assertEquals(List.of(first), transport.pollEvents());
+        assertEquals(List.of(second, setup), transport.pollEvents());
+        assertTrue(transport.pollEvents().isEmpty());
+        verify(logger, times(2)).warning("NXS: A player could not connect to the server.");
+        verifyNoMoreInteractions(logger);
+    }
+
+    @Test
     void doesNotLogFeedbackUntilNativeDeliverySucceeds() {
         var nativeTransport = mock(ProviderTransport.class);
         var logger = mock(GeyserLogger.class);
