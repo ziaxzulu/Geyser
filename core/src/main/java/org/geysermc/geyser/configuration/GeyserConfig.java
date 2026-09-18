@@ -191,7 +191,7 @@ public interface GeyserConfig {
                 return ProviderClient.ControlTransport.HTTP;
             }
 
-            @Comment("Allow provider-assisted player connections after direct and maintained UDP candidates fail. Requires control-transport: auto.")
+            @Comment("Enable provider-assisted player connections explicitly. False disables assistance; connectivity check failures never enable it automatically. Requires control-transport: auto.")
             @DefaultBoolean(false)
             boolean assistedJoins();
 

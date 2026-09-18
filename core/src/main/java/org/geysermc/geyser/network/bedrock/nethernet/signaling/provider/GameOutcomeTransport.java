@@ -45,13 +45,15 @@ public final class GameOutcomeTransport implements ProviderTransport {
     private final ProviderTransport delegate;
     private final GameOutcomeReporter outcomes;
     private final GeyserLogger logger;
+    private final boolean assistedJoins;
     private final Map<Integer, ConnectivityCheck> reportedChecks = new HashMap<>();
     private long connectivityRevision;
 
-    public GameOutcomeTransport(ProviderTransport delegate, GameOutcomeReporter outcomes, GeyserLogger logger) {
+    public GameOutcomeTransport(ProviderTransport delegate, GameOutcomeReporter outcomes, GeyserLogger logger, boolean assistedJoins) {
         this.delegate = delegate;
         this.outcomes = outcomes;
         this.logger = logger;
+        this.assistedJoins = assistedJoins;
     }
 
     @Override
@@ -104,7 +106,10 @@ public final class GameOutcomeTransport implements ProviderTransport {
             if (selected.outcome() == ConnectivityOutcome.ESTABLISHED) {
                 logger.info("NXS IPv" + family + " connectivity checks established the transport.");
             } else {
-                logger.warning("NXS IPv" + family + " connectivity checks could not establish the transport. Assisted joins may still be available.");
+                logger.warning("NXS IPv" + family + " connectivity checks could not establish the transport. "
+                    + (assistedJoins
+                        ? "Assisted joining is enabled; connectivity may differ for clients with other reachable addresses."
+                        : "To allow assisted player connections, set assisted-joins: true and control-transport: auto under bedrock.signaling.nxs."));
             }
         }
     }

@@ -111,7 +111,7 @@ class GameOutcomeReporterTest {
         FakeTransport nativeTransport = new FakeTransport();
         for (int i = 0; i < 99; i++) nativeTransport.events.add(new JsonObject());
         GameOutcomeTransport transport = new GameOutcomeTransport(nativeTransport, reporter,
-                org.mockito.Mockito.mock(org.geysermc.geyser.GeyserLogger.class));
+                org.mockito.Mockito.mock(org.geysermc.geyser.GeyserLogger.class), false);
         List<JsonObject> first = transport.pollEvents(); assertEquals(100, first.size());
         assertEquals("ticket.game_joined", first.getLast().get("stage").getAsString());
         assertEquals(100, transport.pollEvents().size()); assertEquals(100, transport.pollEvents().size());
