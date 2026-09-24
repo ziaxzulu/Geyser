@@ -68,3 +68,30 @@ not the Java backend TCP port.
 checks remain active. Explicit `advertise-addresses` entries are eligible targets,
 not an override of failed reachability checks. Configuration changes require a
 Geyser restart; firewall/routing changes are picked up by subsequent checks.
+
+## Optional Warden host location
+
+When using Warden, `bedrock.signaling.nxs.location` can supply a more accurate host
+location than the connection IP estimate:
+
+```yaml
+bedrock:
+  signaling:
+    nxs:
+      location:
+        country: NL
+        city: Amsterdam
+        latitude: 52.37
+        longitude: 4.89
+```
+
+Supply a two-letter country code, a latitude/longitude pair, or both. City is
+optional. Invalid settings are rejected before the provider transport opens.
+An empty map (`location: {}`, the default) clears a previous host override and
+returns to automatic location. A Warden panel override takes precedence.
+Restart Geyser to apply a configuration change.
+
+Geyser sends this through the optional `cloud.warden.location` heartbeat extension;
+NXS providers that do not implement it can ignore it. When the configured provider
+is `warden.cloud` or one of its subdomains, the existing registration log also
+links to the applicable [terms and conditions](https://ziax.com/terms/).
